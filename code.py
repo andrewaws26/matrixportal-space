@@ -306,25 +306,24 @@ space_group.append(planet_tg)
 # Features: Andes mountains, llama, condor, Inca patterns, pulsing hearts, love messages
 
 PERU_CYCLE = 300.0
-PERU_PT = [0, 40, 80, 140, 190, 240, 270]  # phase start times
+PERU_PT = [0, 20, 55, 110, 165, 220, 260]  # phase start times (compressed, less dead time)
 
 # SILHOUETTE ART DESIGN: bright things on BLACK = maximum LED impact
-# Sky is always BLACK — stars/sun/sprites are the show
 PERU_SKY = [
     (0, 0, 0), (0, 0, 0), (0, 0, 0), (0, 0, 0),
     (0, 0, 0), (0, 0, 0), (0, 0, 0),
 ]
 
-# Mountain silhouette: just an OUTLINE/SHAPE against black
-# shadow=always BLACK (invisible), body=single bold silhouette color, highlight=bright edge
+# Mountain silhouette colors — COOL tones when sun is up (contrast with orange sun)
+# shadow=always BLACK, body=silhouette color, highlight=bright edge
 PERU_MTN = [
-    [(0,0,0),(50,0,100),(120,40,200)],            # night: dark purple silhouette outline
-    [(0,0,0),(140,60,0),(255,120,0)],             # dawn: warm amber outline
-    [(0,0,0),(0,100,60),(0,200,100)],             # morning: teal-green outline
-    [(0,0,0),(0,120,60),(0,220,100)],             # midday: vivid green outline
-    [(0,0,0),(200,80,0),(255,160,0)],             # golden: bright orange outline
-    [(0,0,0),(180,0,40),(255,60,60)],             # sunset: red outline
-    [(0,0,0),(50,0,100),(120,40,200)],            # night: dark purple silhouette outline
+    [(0,0,0),(50,0,100),(120,40,200)],            # night: purple
+    [(0,0,0),(0,60,120),(0,120,220)],             # dawn: blue (contrasts with orange sun)
+    [(0,0,0),(0,100,60),(0,200,100)],             # morning: teal-green
+    [(0,0,0),(0,120,60),(0,220,100)],             # midday: vivid green
+    [(0,0,0),(0,80,140),(0,140,255)],             # golden: blue (contrasts with orange sun)
+    [(0,0,0),(100,0,80),(200,0,140)],             # sunset: magenta
+    [(0,0,0),(50,0,100),(120,40,200)],            # night: purple
 ]
 
 # Snow — BRIGHT WHITE dots at peak tips, the brightest pixels on screen
@@ -404,6 +403,25 @@ for _ in range(65):
 p_star_grid = displayio.TileGrid(p_star_bmp, pixel_shader=p_star_pal)
 peru_group.append(p_star_grid)
 
+# --- Falling snow overlay ---
+snow_pal = displayio.Palette(2)
+snow_pal[0] = 0x000000; snow_pal.make_transparent(0)
+snow_pal[1] = 0xFFFFFF
+snow_bmp = displayio.Bitmap(W, H, 2)
+snow_grid = displayio.TileGrid(snow_bmp, pixel_shader=snow_pal)
+peru_group.append(snow_grid)
+
+# Snow particles: list of [x, y_float, speed, drift]
+NUM_SNOW = 30
+snow_flakes = []
+for _ in range(NUM_SNOW):
+    snow_flakes.append([
+        random.randint(0, W-1),
+        float(random.randint(-H, H)),
+        random.uniform(0.3, 1.0),
+        random.uniform(-0.3, 0.3),
+    ])
+
 # --- Sun sprite (7x7) ---
 sun_pal = displayio.Palette(3)
 sun_pal[0] = 0x000000; sun_pal.make_transparent(0)
@@ -435,23 +453,23 @@ ll_pal[5] = 0xCCAA80  # shadow
 LLW, LLH = 12, 9
 ll_bmp = displayio.Bitmap(LLW, LLH, 6)
 for px,py,pc in [
-    # Ears
-    (8,0,1),(9,0,1),
+    # Ears (flipped: head now on left, faces right)
+    (2,0,1),(3,0,1),
     # Head
-    (7,1,1),(8,1,1),(9,1,1),(10,1,1),(9,1,4),
+    (1,1,1),(2,1,1),(3,1,1),(4,1,1),(2,1,4),
     # Neck
-    (7,2,1),(8,2,1),(9,2,5),
-    (6,3,1),(7,3,1),(8,3,5),
+    (2,2,5),(3,2,1),(4,2,1),
+    (3,3,5),(4,3,1),(5,3,1),
     # Body with woven blanket
-    (2,4,1),(3,4,2),(4,4,3),(5,4,2),(6,4,1),(7,4,1),(8,4,1),(9,4,1),
-    (1,5,1),(2,5,1),(3,5,3),(4,5,2),(5,5,3),(6,5,1),(7,5,1),(8,5,1),(9,5,1),
+    (2,4,1),(3,4,1),(4,4,1),(5,4,1),(6,4,2),(7,4,3),(8,4,2),(9,4,1),
+    (2,5,1),(3,5,1),(4,5,1),(5,5,1),(6,5,3),(7,5,2),(8,5,3),(9,5,1),(10,5,1),
     # Belly
-    (1,6,5),(2,6,1),(3,6,1),(4,6,1),(5,6,1),(6,6,1),(7,6,1),(8,6,5),
+    (3,6,5),(4,6,1),(5,6,1),(6,6,1),(7,6,1),(8,6,1),(9,6,1),(10,6,5),
     # Tail
-    (0,4,1),(0,3,1),
+    (11,4,1),(11,3,1),
     # Legs
     (3,7,1),(4,7,1),(7,7,1),(8,7,1),
-    (3,8,4),(7,8,4),
+    (4,8,4),(8,8,4),
 ]:
     if 0<=px<LLW and 0<=py<LLH: ll_bmp[px,py]=pc
 llama_tg = displayio.TileGrid(ll_bmp, pixel_shader=ll_pal, x=W+10, y=H)
@@ -485,32 +503,86 @@ for px,py,pc in [
 condor_tg = displayio.TileGrid(cd_bmp, pixel_shader=cd_pal, x=W+20, y=-10)
 peru_group.append(condor_tg)
 
-# --- Second llama (walks the other direction, smaller baby llama) ---
-ll2_pal = displayio.Palette(4)
+# --- Female llama (same size as male, faces left, purple/blue blanket) ---
+ll2_pal = displayio.Palette(6)
 ll2_pal[0] = 0x000000; ll2_pal.make_transparent(0)
-ll2_pal[1] = 0xDDCCBB  # lighter cream
-ll2_pal[2] = 0xFF4400  # orange blanket
-ll2_pal[3] = 0x604020  # dark accents
+ll2_pal[1] = 0xFFEEDD  # cream body (slightly lighter than male)
+ll2_pal[2] = 0xFF00CC  # hot pink blanket
+ll2_pal[3] = 0x00FFFF  # cyan blanket accent
+ll2_pal[4] = 0x604020  # dark (eye/hooves)
+ll2_pal[5] = 0xDDBB99  # shadow
 
-LL2W, LL2H = 8, 7
-ll2_bmp = displayio.Bitmap(LL2W, LL2H, 4)
+LL2W, LL2H = 12, 9
+ll2_bmp = displayio.Bitmap(LL2W, LL2H, 6)
 for px,py,pc in [
-    # Ears
-    (5,0,1),(6,0,1),
+    # Ears (head on right, faces left)
+    (8,0,1),(9,0,1),
     # Head
-    (4,1,1),(5,1,1),(6,1,1),(6,1,3),
+    (7,1,1),(8,1,1),(9,1,1),(10,1,1),(9,1,4),
     # Neck
-    (4,2,1),(5,2,1),
-    (3,3,1),(4,3,1),
-    # Body with blanket
-    (1,4,1),(2,4,2),(3,4,2),(4,4,1),(5,4,1),(6,4,1),
-    (1,5,1),(2,5,1),(3,5,1),(4,5,1),(5,5,1),
+    (7,2,1),(8,2,1),(9,2,5),
+    (6,3,1),(7,3,1),(8,3,5),
+    # Body with woven blanket (purple/blue pattern)
+    (2,4,1),(3,4,2),(4,4,3),(5,4,2),(6,4,1),(7,4,1),(8,4,1),(9,4,1),
+    (1,5,1),(2,5,1),(3,5,3),(4,5,2),(5,5,3),(6,5,1),(7,5,1),(8,5,1),(9,5,1),
+    # Belly
+    (1,6,5),(2,6,1),(3,6,1),(4,6,1),(5,6,1),(6,6,1),(7,6,1),(8,6,5),
+    # Tail
+    (0,4,1),(0,3,1),
     # Legs
-    (2,6,3),(5,6,3),
+    (3,7,1),(4,7,1),(7,7,1),(8,7,1),
+    (3,8,4),(7,8,4),
 ]:
     if 0<=px<LL2W and 0<=py<LL2H: ll2_bmp[px,py]=pc
 llama2_tg = displayio.TileGrid(ll2_bmp, pixel_shader=ll2_pal, x=-20, y=H)
 peru_group.append(llama2_tg)
+
+# --- Baby llamas (tiny 5x4 sprites, colored by parent) ---
+BW, BH = 5, 4
+_baby_pixels = [
+    (2,0,1),
+    (1,1,1),(2,1,1),
+    (0,2,1),(1,2,2),(2,2,1),(3,2,1),  # blanket pixel at (1,2)
+    (1,3,3),(3,3,3),
+]
+
+# Baby 1 — boy (dad's red/gold blanket)
+b1_pal = displayio.Palette(4)
+b1_pal[0] = 0x000000; b1_pal.make_transparent(0)
+b1_pal[1] = 0xFFEEDD  # cream
+b1_pal[2] = 0xFF2200  # dad's red
+b1_pal[3] = 0x604020  # hooves
+baby1_bmp = displayio.Bitmap(BW, BH, 4)
+for px,py,pc in _baby_pixels:
+    baby1_bmp[px, py] = pc
+baby1_tg = displayio.TileGrid(baby1_bmp, pixel_shader=b1_pal, x=W+10, y=H+10)
+peru_group.append(baby1_tg)
+
+# Baby 2 — girl (mom's pink/cyan blanket)
+b2_pal = displayio.Palette(4)
+b2_pal[0] = 0x000000; b2_pal.make_transparent(0)
+b2_pal[1] = 0xFFEEDD  # cream
+b2_pal[2] = 0xFF00CC  # mom's pink
+b2_pal[3] = 0x604020  # hooves
+baby2_bmp = displayio.Bitmap(BW, BH, 4)
+for px,py,pc in _baby_pixels:
+    baby2_bmp[px, py] = pc
+baby2_tg = displayio.TileGrid(baby2_bmp, pixel_shader=b2_pal, x=W+10, y=H+10)
+peru_group.append(baby2_tg)
+
+# Baby 3 — boy (dad's red/gold blanket)
+b3_pal = displayio.Palette(4)
+b3_pal[0] = 0x000000; b3_pal.make_transparent(0)
+b3_pal[1] = 0xFFEEDD  # cream
+b3_pal[2] = 0xFFCC00  # dad's gold
+b3_pal[3] = 0x604020  # hooves
+baby3_bmp = displayio.Bitmap(BW, BH, 4)
+for px,py,pc in _baby_pixels:
+    baby3_bmp[px, py] = pc
+baby3_tg = displayio.TileGrid(baby3_bmp, pixel_shader=b3_pal, x=W+10, y=H+10)
+peru_group.append(baby3_tg)
+
+BABY_Y = H - BH - 1
 
 # --- Peruvian flag (12x8, vertical red-white-red bands) ---
 flag_pal = displayio.Palette(4)
@@ -532,16 +604,30 @@ for px in range(FLW):
 # Gold emblem dot in center of white band
 for px,py in [(5,3),(6,3),(5,4),(6,4)]:
     flag_bmp[px, py] = 3
-flag_tg = displayio.TileGrid(flag_bmp, pixel_shader=flag_pal, x=W+10, y=H+10)
+# Flag stays in upper left corner, always visible
+flag_tg = displayio.TileGrid(flag_bmp, pixel_shader=flag_pal, x=1, y=1)
 peru_group.append(flag_tg)
 
 # --- Tiny heart (5x4, appears above llamas when they meet) ---
 th_pal = displayio.Palette(2)
 th_pal[0] = 0x000000; th_pal.make_transparent(0)
 th_pal[1] = 0xFF0000
-THW, THH = 5, 4
+THW, THH = 7, 6
 th_bmp = displayio.Bitmap(THW, THH, 2)
-for px,py in [(1,0),(3,0),(0,1),(1,1),(2,1),(3,1),(4,1),(0,2),(1,2),(2,2),(3,2),(4,2),(1,3),(2,3),(3,3),(2,3)]:
+#  .XX.XX.
+#  XXXXXXX
+#  XXXXXXX
+#  .XXXXX.
+#  ..XXX..
+#  ...X...
+for px,py in [
+    (1,0),(2,0),(4,0),(5,0),
+    (0,1),(1,1),(2,1),(3,1),(4,1),(5,1),(6,1),
+    (0,2),(1,2),(2,2),(3,2),(4,2),(5,2),(6,2),
+    (1,3),(2,3),(3,3),(4,3),(5,3),
+    (2,4),(3,4),(4,4),
+    (3,5),
+]:
     if 0<=px<THW and 0<=py<THH: th_bmp[px,py]=1
 heart_tg = displayio.TileGrid(th_bmp, pixel_shader=th_pal, x=W+10, y=H+10)
 peru_group.append(heart_tg)
@@ -593,12 +679,13 @@ planet_shown = False
 
 # Peru state
 condor_shown = False
-flag_shown = False
-# Llama love story state machine:
-# 0=idle, 1=approaching, 2=meeting, 3=heart, 4=leaving together, 5=returning with babies
+# Llama love story — lonely goatherd style
+# 0=idle, 1=llama1 enters alone, 2=lonely pause, 3=llama2 enters,
+# 4=approaching, 5=meeting, 6=hearts float up, 7=nuzzle pause,
+# 8=leave together, 9=offscreen pause, 10=family returns with baby
 llama_phase = 0
 llama_timer = 0.0
-llama_meet_x = 30  # where they meet in the middle
+llama_meet_x = 30
 
 # IP display at startup
 ip_label = Label(terminalio.FONT, text="http://" + ip, color=0x33AA66)
@@ -643,6 +730,8 @@ while True:
             display.root_group = rain_group
         elif current_mode == "peru":
             display.root_group = peru_group
+            cycle_start = now  # reset cycle so llamas start immediately
+            llama_phase = 0
         prev_mode = current_mode
         if current_mode == "space" and (now - start_time) < 15:
             if ip_label not in space_group:
@@ -798,105 +887,192 @@ while True:
             p_star_pal[1] = rgb_pack((clamp(int(255*sb)), clamp(int(255*sb)), clamp(int(255*sb))))
             p_star_pal[2] = rgb_pack((clamp(int(170*sb)), clamp(int(170*sb)), clamp(int(136*sb))))
 
-        # --- Sun arc (rises right side, arcs HIGH over mountains, sets left) ---
-        # Tallest peak is y=5, sun is 7px tall, so y=-4 keeps it above peaks
-        if 30 < cycle_t < 80:
-            # Rising from right horizon
-            st = (cycle_t - 30) / 50.0
+        # --- Falling snow ---
+        if frame % 2 == 0:
+            for flake in snow_flakes:
+                # Clear old position
+                ox, oy = int(flake[0]), int(flake[1])
+                if 0 <= ox < W and 0 <= oy < H:
+                    snow_bmp[ox, oy] = 0
+                # Move
+                flake[1] += flake[2] * dt * 8
+                flake[0] += flake[3] + math.sin(now * 2 + flake[0]) * 0.15
+                # Wrap
+                if flake[1] > H:
+                    flake[1] = -1.0
+                    flake[0] = random.randint(0, W-1)
+                if flake[0] < 0: flake[0] = W - 1
+                if flake[0] >= W: flake[0] = 0
+                # Draw new position
+                nx, ny = int(flake[0]), int(flake[1])
+                if 0 <= nx < W and 0 <= ny < H:
+                    snow_bmp[nx, ny] = 1
+            # Snow brightness — brighter in cold phases (night, dawn, sunset)
+            snow_alpha = 0.0
+            if pp in (0, 6): snow_alpha = 1.0
+            elif pp in (1, 5): snow_alpha = 0.6
+            elif pp in (2, 4): snow_alpha = 0.3
+            else: snow_alpha = 0.1
+            sv = clamp(int(255 * snow_alpha))
+            snow_pal[1] = rgb_pack((sv, sv, sv))
+
+        # --- Sun arc (fast rise, slow cruise, fast set) ---
+        if 3 < cycle_t < 9:
+            # Quick rise from right
+            st = (cycle_t - 3) / 6.0
             ease = st * st * (3.0 - 2.0 * st)
-            sun_tg.x = 54 - int(ease * 10)
-            sun_tg.y = 20 - int(ease * 24)  # rise from y=20 up to y=-4
-        elif 80 <= cycle_t < 230:
-            # Full arc across the sky, well above mountains
-            st = (cycle_t - 80) / 150.0
-            sun_tg.x = 44 - int(st * 40)  # sweep from x=44 to x=4
-            sun_tg.y = -4 + int(math.sin(st * math.pi) * 2)  # gentle bob at y=-4 to -2
-        elif 230 <= cycle_t < 270:
-            # Setting on left side
-            st = (cycle_t - 230) / 40.0
+            sun_tg.x = W - int(ease * (W - 50))
+            sun_tg.y = 18 - int(ease * 16)
+        elif 9 <= cycle_t < 200:
+            # Slow cruise across the sky
+            st = (cycle_t - 9) / 191.0
+            sun_tg.x = 50 - int(st * 56)
+            sun_tg.y = 2 + int(math.sin(st * math.pi) * 3)
+        elif 200 <= cycle_t < 206:
+            # Quick set to left
+            st = (cycle_t - 200) / 6.0
             ease = st * st * (3.0 - 2.0 * st)
-            sun_tg.x = 4 - int(ease * 6)
-            sun_tg.y = -4 + int(ease * 24)  # drop from y=-4 to y=20
+            sun_tg.x = -6 - int(ease * 5)
+            sun_tg.y = 5 + int(ease * 14)
         else:
-            sun_tg.y = H + 5  # hidden
+            sun_tg.y = H + 5
 
 
-        # --- Llama love story (plays during morning/midday ~70-180s) ---
+        # --- Llama love story — lonely goatherd style (~60-200s) ---
         LLAMA_Y = H - LLH - 1
         LLAMA2_Y = H - LL2H - 1
+        HIDE = H + 10
 
-        if cycle_t < 10:
+        if cycle_t < 3:
             llama_phase = 0
-            llama_tg.x = W + 10; llama_tg.y = H + 5
-            llama2_tg.x = -20; llama2_tg.y = H + 5
-            heart_tg.x = W + 10; heart_tg.y = H + 10
+            llama_tg.x = W + 10; llama_tg.y = HIDE
+            llama2_tg.x = -20; llama2_tg.y = HIDE
+            heart_tg.x = W + 10; heart_tg.y = HIDE
+            baby1_tg.x = W + 10; baby1_tg.y = HIDE
+            baby2_tg.x = W + 10; baby2_tg.y = HIDE
+            baby3_tg.x = W + 10; baby3_tg.y = HIDE
 
-        # Phase 0 → 1: Start approaching
-        if 70 < cycle_t < 75 and llama_phase == 0:
+        # Phase 0 → 1: Lonely llama enters from right
+        # Triggers at start of cycle and again after story ends
+        if cycle_t > 5 and llama_phase == 0:
             llama_phase = 1
-            llama_tg.x = W + 5; llama_tg.y = LLAMA_Y     # enters from right
-            llama2_tg.x = -LL2W - 5; llama2_tg.y = LLAMA2_Y  # enters from left
+            llama_tg.x = W + 5; llama_tg.y = LLAMA_Y
             llama_timer = now
 
-        # Phase 1: Walking toward each other
+        # Phase 1: Lonely llama walks to center-right, stops
         if llama_phase == 1:
-            if frame % 3 == 0:
-                if llama_tg.x > llama_meet_x + 2:
-                    llama_tg.x -= 1
-                if llama2_tg.x < llama_meet_x - LL2W - 2:
-                    llama2_tg.x += 1
-            # Both arrived?
-            if llama_tg.x <= llama_meet_x + 2 and llama2_tg.x >= llama_meet_x - LL2W - 2:
+            if frame % 3 == 0 and llama_tg.x > 38:
+                llama_tg.x -= 1
+            if llama_tg.x <= 38:
                 llama_phase = 2
                 llama_timer = now
 
-        # Phase 2: Standing together (pause)
+        # Phase 2: Lonely pause — llama stands alone, looking
         if llama_phase == 2:
-            if now - llama_timer > 2.0:
+            if now - llama_timer > 5.0:
                 llama_phase = 3
                 llama_timer = now
-                # Show heart above them
-                heart_tg.x = llama_meet_x - 1
-                heart_tg.y = LLAMA_Y - THH - 2
+                llama2_tg.x = -LL2W - 5; llama2_tg.y = LLAMA2_Y
 
-        # Phase 3: Heart visible, pulsing
+        # Phase 3: Second llama appears from left, walks toward first
         if llama_phase == 3:
-            pulse = math.sin(now * 4.0) * 0.3 + 0.7
-            th_pal[1] = (max(1, int(255 * pulse)) << 16)
-            # Heart floats up slowly
-            if frame % 20 == 0:
-                heart_tg.y -= 1
-            if now - llama_timer > 4.0:
+            llama2_tg.flip_x = False  # face right (head on right = default)
+            if frame % 4 == 0 and llama2_tg.x < llama_meet_x - LL2W - 2:
+                llama2_tg.x += 1
+            if llama2_tg.x >= llama_meet_x - LL2W - 2:
                 llama_phase = 4
                 llama_timer = now
-                heart_tg.x = W + 10; heart_tg.y = H + 10  # hide heart
 
-        # Phase 4: Leave together (both walk off right side)
+        # Phase 4: First llama walks toward second
         if llama_phase == 4:
-            if frame % 3 == 0:
-                llama_tg.x += 1
-                llama2_tg.x += 1
-            if llama_tg.x > W + 10:
+            if frame % 3 == 0 and llama_tg.x > llama_meet_x + 2:
+                llama_tg.x -= 1
+            if llama_tg.x <= llama_meet_x + 2:
                 llama_phase = 5
                 llama_timer = now
 
-        # Phase 5: Return from right with babies (baby = llama2 following llama1)
-        if llama_phase == 5 and now - llama_timer > 3.0:
-            if llama_tg.x > W + 5:
-                # Reset positions — family enters from right
-                llama_tg.x = W + 5; llama_tg.y = LLAMA_Y
-                llama2_tg.x = W + 18; llama2_tg.y = LLAMA2_Y  # baby follows behind
+        # Phase 5: They meet — pause face to face
+        if llama_phase == 5:
+            if now - llama_timer > 2.0:
+                llama_phase = 6
+                llama_timer = now
+                heart_tg.x = llama_meet_x - 1
+                heart_tg.y = LLAMA_Y - THH - 2
+
+        # Phase 6: Hearts float up — pulsing, rising
+        if llama_phase == 6:
+            pulse = math.sin(now * 4.0) * 0.3 + 0.7
+            th_pal[1] = (max(1, int(255 * pulse)) << 16)
+            if frame % 15 == 0:
+                heart_tg.y -= 1
+            if now - llama_timer > 5.0:
+                llama_phase = 7
+                llama_timer = now
+
+        # Phase 7: Nuzzle — llamas move 1px closer, heart stays
+        if llama_phase == 7:
+            if now - llama_timer < 1.0:
+                if frame % 10 == 0:
+                    if llama_tg.x > llama_meet_x:
+                        llama_tg.x -= 1
+                    if llama2_tg.x < llama_meet_x - LL2W:
+                        llama2_tg.x += 1
+            if now - llama_timer > 3.0:
+                llama_phase = 8
+                llama_timer = now
+                heart_tg.x = W + 10; heart_tg.y = HIDE
+
+        # Phase 8: Leave together to the left
+        if llama_phase == 8:
+            llama2_tg.flip_x = True  # flip to face left (walking left)
             if frame % 3 == 0:
                 llama_tg.x -= 1
                 llama2_tg.x -= 1
-            # Family walks all the way across and off the left
+            if llama_tg.x < -LLW - 5:
+                llama_phase = 9
+                llama_timer = now
+                llama_tg.x = W + 10; llama_tg.y = HIDE
+                llama2_tg.x = W + 10; llama2_tg.y = HIDE
+
+        # Phase 9: Offscreen pause — they're starting a family
+        if llama_phase == 9 and now - llama_timer > 5.0:
+            llama_phase = 10
+            llama_timer = now
+            # Family enters from right: parent1, baby1, baby2, baby3, parent2
+            llama_tg.x = W + 5; llama_tg.y = LLAMA_Y
+            baby1_tg.x = W + 18; baby1_tg.y = BABY_Y
+            baby2_tg.x = W + 25; baby2_tg.y = BABY_Y
+            baby3_tg.x = W + 32; baby3_tg.y = BABY_Y
+            llama2_tg.x = W + 40; llama2_tg.y = LLAMA2_Y
+
+        # Phase 10: Family returns — parents + 3 babies walk left
+        if llama_phase == 10:
+            if frame % 2 == 0:
+                llama_tg.x -= 1
+                baby1_tg.x -= 1
+                baby2_tg.x -= 1
+                baby3_tg.x -= 1
+                llama2_tg.x -= 1
+            # Heart above the family
+            if llama_tg.x > 5 and llama_tg.x < 50:
+                heart_tg.x = llama_tg.x + 2
+                heart_tg.y = LLAMA_Y - THH - 2
+                pulse = math.sin(now * 3.0) * 0.3 + 0.7
+                th_pal[1] = (max(1, int(255 * pulse)) << 16)
+            else:
+                heart_tg.x = W + 10; heart_tg.y = HIDE
+            # All off screen left?
             if llama2_tg.x < -LL2W - 5:
                 llama_phase = 0
-                llama_tg.x = W + 10; llama_tg.y = H + 5
-                llama2_tg.x = -20; llama2_tg.y = H + 5
+                llama_tg.x = W + 10; llama_tg.y = HIDE
+                llama2_tg.x = -20; llama2_tg.y = HIDE
+                baby1_tg.x = W + 10; baby1_tg.y = HIDE
+                baby2_tg.x = W + 10; baby2_tg.y = HIDE
+                baby3_tg.x = W + 10; baby3_tg.y = HIDE
+                heart_tg.x = W + 10; heart_tg.y = HIDE
 
-        # --- Condor (soars during midday ~140-200s) ---
-        if 140 < cycle_t < 200 and not condor_shown:
+        # --- Condor (soars during midday ~110-170s) ---
+        if 110 < cycle_t < 170 and not condor_shown:
             condor_tg.x = W + 5
             condor_tg.y = random.randint(6, 14)
             condor_shown = True
@@ -908,22 +1084,6 @@ while True:
                 condor_shown = False
                 condor_tg.x = W + 20; condor_tg.y = -10
         if cycle_t < 10: condor_shown = False
-
-        # --- Peruvian flag (appears during dawn ~45-75s, floats in the void) ---
-        if 45 < cycle_t < 75 and not flag_shown:
-            flag_tg.x = W + 5
-            flag_tg.y = random.randint(8, 16)
-            flag_shown = True
-        if flag_shown:
-            if frame % 4 == 0:
-                flag_tg.x -= 1
-            # Gentle flutter
-            if frame % 30 == 0:
-                flag_tg.y += 1 if frame % 60 < 30 else -1
-            if flag_tg.x < -FLW:
-                flag_shown = False
-                flag_tg.x = W + 10; flag_tg.y = H + 10
-        if cycle_t < 10: flag_shown = False
 
     # ==================================================================
     # MATRIX RAIN

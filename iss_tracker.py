@@ -125,7 +125,8 @@ def restore(x, y):
 
 def update_map():
     global px, py
-    restore(px, py)
+    for dx, dy in ((0,0), (1,0), (-1,0), (0,-1), (0,1)):
+        restore(px+dx, py+dy)
     while len(trail) >= TRAIL_MAX:
         ox, oy = trail.pop(0)
         restore(ox, oy)
@@ -145,15 +146,27 @@ map_group = displayio.Group()
 map_bmp = displayio.Bitmap(W, H, 10)
 map_pal = displayio.Palette(10)
 map_pal[0] = 0x000000  # ocean: BLACK
-map_pal[1] = 0x008866  # North America: teal
+map_pal[1] = 0xFFCC00  # North America: yellow-gold
 map_pal[2] = 0x00CC44  # South America: green
-map_pal[3] = 0x4466FF  # Europe: blue
+map_pal[3] = 0x4488FF  # Europe: bright blue
 map_pal[4] = 0xFF8800  # Africa: orange
-map_pal[5] = 0xAA44DD  # Asia: purple
+map_pal[5] = 0xCC44AA  # Asia: magenta-pink
 map_pal[6] = 0xCC2222  # Oceania: red
-map_pal[7] = 0xFF3300  # ISS: bright red-orange
-map_pal[8] = 0x801800  # trail: dim red
+map_pal[7] = 0xFFFFFF  # ISS: dynamic (set per-frame based on continent)
+map_pal[8] = 0x666666  # trail: dim gray
 map_pal[9] = 0xFFFFFF  # Louisville: bright white
+
+# Best contrast color for ISS dot per continent
+# Picks the color most different from the continent underneath
+ISS_CONTRAST = {
+    0: 0xFFFFFF,  # ocean (black) -> white
+    1: 0xFF00FF,  # N.America (yellow) -> magenta
+    2: 0xFF0000,  # S.America (green) -> red
+    3: 0xFFFF00,  # Europe (blue) -> yellow
+    4: 0x00FFFF,  # Africa (orange) -> cyan
+    5: 0x00FF00,  # Asia (magenta) -> green
+    6: 0x00FFFF,  # Oceania (red) -> cyan
+}
 init_map(map_bmp)
 map_group.append(displayio.TileGrid(map_bmp, pixel_shader=map_pal))
 
@@ -181,15 +194,20 @@ while True:
         if fetch():
             update_map()
 
-    # Blink ISS dot
+    # Blink ISS cross (4 dots) with contrast color
     if data_ready:
         if now - blink_time >= 0.5:
             blink_time = now
             dot_on = not dot_on
             if dot_on:
-                if 0 <= px < W and 0 <= py < H:
-                    map_bmp[px, py] = 7
+                c = get_continent(px, py)
+                map_pal[7] = ISS_CONTRAST.get(c, 0xFFFFFF)
+                for dx, dy in ((0,0), (1,0), (-1,0), (0,-1), (0,1)):
+                    nx, ny = px+dx, py+dy
+                    if 0 <= nx < W and 0 <= ny < H:
+                        map_bmp[nx, ny] = 7
             else:
-                restore(px, py)
+                for dx, dy in ((0,0), (1,0), (-1,0), (0,-1), (0,1)):
+                    restore(px+dx, py+dy)
 
     time.sleep(0.1)
