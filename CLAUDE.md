@@ -62,29 +62,61 @@ Everything runs in a single `code.py` — CircuitPython on the MatrixPortal S3 e
 - `rgbmatrix.RGBMatrix` → `framebufferio.FramebufferDisplay` at 64x32, bit_depth=6
 - Each animation mode has its own `displayio.Group` with layered `TileGrid` + `Bitmap` + `Palette` objects
 - Mode switching swaps `display.root_group`
-- Color/brightness changes are done via palette manipulation (not bitmap redraws) for efficiency
+- Color changes are done via palette manipulation (not bitmap redraws) for efficiency
+- Brightness uses `display.brightness` (OE pin PWM duty cycle) for hardware-level dimming
 
 ### Animation modes
 1. **Space** — 5-minute cycle (300s) with 6 phases. Parallax star field (3 layers at different scroll speeds), animated nebula palette, pixel-art rocket with thrust animation, shooting stars, scrolling planet, phase-based text messages
 2. **Matrix Rain** — Classic green cascade. 20 rain drops with variable speed/length, palette-based fade trail
-3. **Rainbow Wave** — 16-color HSV palette scrolling diagonally across the display
-4. **Peru** — 5-minute Andes day/night cycle (300s) with 7 phases. Procedural mountain range with animated sky/snow/valley palettes, sun arc, pixel-art llama with woven blanket, condor, scrolling Inca textile pattern, pulsing heart, Spanish love messages
+3. **Peru** — 5-minute Andes day/night cycle (300s) with 7 phases. Procedural mountain range with animated sky/snow/valley palettes, sun arc, pixel-art llama with woven blanket, condor, scrolling Inca textile pattern, pulsing heart, Spanish love messages
 
 ### Web control
 - `adafruit_httpserver.Server` on port 80
-- Routes: `/`, `/mode/{space,rain,rainbow,peru}`, `/bright/<1-10>`
+- Routes: `/`, `/mode/{space,rain,peru}`, `/bright/<1-10>`
 - Mobile-friendly HTML served inline (no external assets)
 - IP address scrolls across the display on startup for discovery
 
 ### Input
 - Physical buttons cycle through modes (UP = next, DOWN = previous)
-- Web UI for mode selection and brightness (1–10 scale, maps to 0.1–1.0 multiplier)
+- Web UI for mode selection and brightness (1–10 scale, maps to `display.brightness` 0.1–1.0)
 
 ### Main loop
 - ~28 FPS target (`time.sleep(0.035)`)
 - `server.poll()` handles HTTP requests each frame
-- Brightness changes propagate via `bri_changed` flag to update all palettes once
 - Animation state (scroll positions, timers, sprite visibility) persists across frames via module-level globals
+
+## Color Selection Guidelines
+
+This panel has NO gamma correction and only 64 levels per channel (bit_depth=6). Colors that look fine on a monitor will look like mud on the LEDs. These rules are critical for every animation.
+
+### Minimum brightness
+- Any color component meant to be visible must be **≥0x28 (40)** in 8-bit hex terms
+- Components below 0x14 (20) are essentially invisible — don't use them for meaningful content
+- The bottom 16 of 64 levels cover 0-50% perceived brightness; everything below level 8 looks nearly identical
+
+### Green dominance
+- Green is **3.4x brighter than red** and **10x brighter than blue** at the same drive level
+- Equal RGB values (e.g. 0x404040) look green, not gray
+- For balanced yellow: use high red + reduced green (e.g. 0xFF5500, not 0xFFFF00)
+- For white: reduce green (e.g. 0xFFA8FF rather than 0xFFFFFF)
+
+### Contrast between elements
+- Adjacent elements must differ in **hue**, not just brightness — two dark browns are indistinguishable
+- Minimum dominant-channel difference between neighbors: **0x30 (48)** in 8-bit hex
+- At the dim end (levels 5-15), colors need even MORE separation to be distinguishable
+- Use complementary colors: red/cyan, blue/yellow, green/magenta give maximum contrast
+
+### Palette design
+- Start with high-saturation primaries and secondaries at levels 40-63 (0x66-0xFF)
+- Reserve levels 0-15 (0x00-0x28) only for backgrounds and subtle accents
+- The safely distinguishable hues: black, white, red, green, blue, yellow, cyan, magenta, orange, pink
+- Do NOT use muted/desaturated colors (dusty rose, slate gray, etc.) — they collapse to identical values
+- Do NOT port web/monitor hex colors directly — they will look wrong
+
+### Testing
+- Always verify colors on the actual panel, not on a monitor
+- Check in the deployment lighting conditions — ambient light kills the lowest ~5 levels
+- At 4mm pitch from 1+ meter, adjacent dim pixels merge — use black borders or outlines to separate regions
 
 ## Development Notes
 

@@ -1,5 +1,5 @@
 # MatrixPortal S3 — Multi-animation display with phone control via Wi-Fi
-# Space: 5-min cycle | Matrix Rain | Rainbow Wave | Peru: for mi amor
+# Space: 5-min cycle | Matrix Rain | Peru: for mi amor
 # Connect to http://<board-ip> from your phone to switch modes
 
 import time
@@ -51,9 +51,7 @@ server = Server(pool, debug=False)
 
 # === STATE ===
 current_mode = "space"
-brightness = 8
-bri_mult = 0.8
-bri_changed = True
+brightness = 10
 
 # === WEB PAGE ===
 HTML = """<!DOCTYPE html>
@@ -73,8 +71,6 @@ font-size:1.1em;font-weight:600;cursor:pointer;transition:transform 0.1s,box-sha
 box-shadow:0 0 20px rgba(100,100,255,0.3)}
 .rain{background:linear-gradient(135deg,#0a2e0a,#1a4a1a);color:#6f6;
 box-shadow:0 0 20px rgba(0,255,0,0.2)}
-.rainbow{background:linear-gradient(135deg,#4a1a2e,#2e1a4a);color:#f8f;
-box-shadow:0 0 20px rgba(255,100,255,0.3)}
 .peru{background:linear-gradient(135deg,#8B0000,#CC3333);color:#FFD700;
 box-shadow:0 0 20px rgba(255,215,0,0.3)}
 .active{box-shadow:0 0 30px rgba(255,255,255,0.4);border:2px solid #fff}
@@ -89,7 +85,6 @@ box-shadow:0 0 20px rgba(255,215,0,0.3)}
 <h1>LED Matrix Control</h1>
 <button class="btn space SPACE_ACTIVE" onclick="location.href='/mode/space'">Space</button>
 <button class="btn rain RAIN_ACTIVE" onclick="location.href='/mode/rain'">Matrix Rain</button>
-<button class="btn rainbow RAINBOW_ACTIVE" onclick="location.href='/mode/rainbow'">Rainbow Wave</button>
 <button class="btn peru PERU_ACTIVE" onclick="location.href='/mode/peru'">Mi Peru</button>
 <div class="bright">
 <label>Brightness</label>
@@ -104,7 +99,6 @@ def serve_page(mode):
     page = HTML.replace("IP_ADDR", ip)
     page = page.replace("SPACE_ACTIVE", "active" if mode == "space" else "")
     page = page.replace("RAIN_ACTIVE", "active" if mode == "rain" else "")
-    page = page.replace("RAINBOW_ACTIVE", "active" if mode == "rainbow" else "")
     page = page.replace("PERU_ACTIVE", "active" if mode == "peru" else "")
     page = page.replace("BRIGHT_VAL", str(brightness))
     page = page.replace("BRIGHT_PCT", str(brightness * 10))
@@ -126,12 +120,6 @@ def mode_rain(request: Request):
     current_mode = "rain"
     return Response(request, serve_page("rain"), content_type="text/html")
 
-@server.route("/mode/rainbow")
-def mode_rainbow(request: Request):
-    global current_mode
-    current_mode = "rainbow"
-    return Response(request, serve_page("rainbow"), content_type="text/html")
-
 @server.route("/mode/peru")
 def mode_peru(request: Request):
     global current_mode
@@ -140,13 +128,12 @@ def mode_peru(request: Request):
 
 @server.route("/bright/<level>")
 def set_brightness(request: Request, level: str):
-    global brightness, bri_mult, bri_changed
+    global brightness
     try:
         b = int(level)
         if 1 <= b <= 10:
             brightness = b
-            bri_mult = b / 10.0
-            bri_changed = True
+            display.brightness = b / 10.0
     except ValueError:
         pass
     return Response(request, "", content_type="text/plain")
@@ -163,13 +150,11 @@ def lerp_c(c1, c2, t):
 def rgb_pack(c):
     return (c[0] << 16) | (c[1] << 8) | c[2]
 
-def dim(val, m):
-    if val == 0:
+def clamp(val):
+    """Clamp a color component: 0 stays 0, non-zero floors to 1."""
+    if val <= 0:
         return 0
-    return max(1, int(val * m))
-
-def dim_hex(c, m):
-    return (dim((c>>16)&0xFF,m)<<16)|(dim((c>>8)&0xFF,m)<<8)|dim(c&0xFF,m)
+    return max(1, int(val))
 
 # ======================================================================
 # SPACE ANIMATION — 5-MINUTE MESMERIZING CYCLE
@@ -323,69 +308,56 @@ space_group.append(planet_tg)
 PERU_CYCLE = 300.0
 PERU_PT = [0, 40, 80, 140, 190, 240, 270]  # phase start times
 
-# Sky colors per phase (r,g,b) — animated via palette
+# SILHOUETTE ART DESIGN: bright things on BLACK = maximum LED impact
+# Sky is always BLACK — stars/sun/sprites are the show
 PERU_SKY = [
-    (2, 3, 22),        # night: deep blue
-    (50, 35, 18),      # dawn: warm amber
-    (35, 65, 110),     # morning: bright blue
-    (45, 80, 130),     # midday: vivid blue
-    (90, 55, 20),      # golden hour: deep gold
-    (70, 22, 12),      # sunset: orange-red
-    (2, 3, 22),        # night return
+    (0, 0, 0), (0, 0, 0), (0, 0, 0), (0, 0, 0),
+    (0, 0, 0), (0, 0, 0), (0, 0, 0),
 ]
 
-# Mountain palette targets per phase: shadow, body, highlight
+# Mountain silhouette: just an OUTLINE/SHAPE against black
+# shadow=always BLACK (invisible), body=single bold silhouette color, highlight=bright edge
 PERU_MTN = [
-    [(12,12,22),(22,22,35),(28,28,40)],      # night: blue-gray
-    [(40,28,16),(55,40,24),(75,55,35)],       # dawn: warm
-    [(28,48,28),(42,65,42),(58,80,55)],       # morning: green
-    [(35,55,35),(50,72,48),(65,88,62)],       # midday: bright green
-    [(60,38,16),(80,52,25),(100,68,35)],      # golden: warm gold
-    [(50,18,12),(68,28,16),(85,38,22)],       # sunset: red
-    [(12,12,22),(22,22,35),(28,28,40)],       # night
+    [(0,0,0),(50,0,100),(120,40,200)],            # night: dark purple silhouette outline
+    [(0,0,0),(140,60,0),(255,120,0)],             # dawn: warm amber outline
+    [(0,0,0),(0,100,60),(0,200,100)],             # morning: teal-green outline
+    [(0,0,0),(0,120,60),(0,220,100)],             # midday: vivid green outline
+    [(0,0,0),(200,80,0),(255,160,0)],             # golden: bright orange outline
+    [(0,0,0),(180,0,40),(255,60,60)],             # sunset: red outline
+    [(0,0,0),(50,0,100),(120,40,200)],            # night: dark purple silhouette outline
 ]
 
-# Snow brightness per phase
+# Snow — BRIGHT WHITE dots at peak tips, the brightest pixels on screen
 PERU_SNOW = [
-    (50,50,60), (120,110,100), (220,220,230), (240,240,250),
-    (200,180,140), (150,100,80), (50,50,60),
+    (200,180,255), (255,255,255), (255,255,255), (255,255,255),
+    (255,255,200), (255,200,180), (200,180,255),
 ]
 
-# Green valley per phase
+# Valley floor — single bright green line during day, BLACK at night
 PERU_GREEN = [
-    (5,12,5), (30,40,15), (25,60,20), (30,70,25),
-    (40,50,12), (25,15,8), (5,12,5),
+    (0,0,0), (0,60,0), (0,180,0), (0,255,0),
+    (0,80,0), (0,40,0), (0,0,0),
 ]
 
-PERU_MSG = [
-    ["BUENAS NOCHES"],
-    ["AMANECE"],
-    ["BUENOS DIAS MI AMOR", "QUE LINDO DIA"],
-    ["LIBRE COMO EL CONDOR", "PERU MAGICO", "LOS ANDES"],
-    ["TE AMO", "MI CORAZON", "ERES MI SOL", "SIEMPRE JUNTOS", "MI VIDA"],
-    ["ATARDECER HERMOSO"],
-    ["DULCES SUENOS MI AMOR"],
-]
-
-PERU_TEXT_INT = [999, 18, 10, 10, 7, 18, 999]
-PERU_TEXT_COL = [0x334466, 0xCC8833, 0x4488CC, 0x3388AA, 0xDD4444, 0xCC6622, 0x334466]
 
 peru_group = displayio.Group()
 
-# --- Mountain background (static bitmap, palette animated for time-of-day) ---
-p_pal = displayio.Palette(8)
-p_pal[0] = 0x020316  # sky (animated)
-p_pal[1] = 0x161622  # mountain shadow
-p_pal[2] = 0x222235  # mountain body
-p_pal[3] = 0x2C2C40  # mountain highlight
-p_pal[4] = 0x383850  # snow cap
-p_pal[5] = 0x0A1A0A  # green valley
-p_pal[6] = 0x000000  # spare
-p_pal[7] = 0x000000  # spare
+# --- Mountain background (SILHOUETTE ART: bright outlines on BLACK) ---
+# Palette: 0=black bg, 1=black shadow, 2=mtn body, 3=mtn highlight,
+#          4=snow, 5=valley floor
+p_pal = displayio.Palette(6)
+p_pal[0] = 0x000000  # background: ALWAYS BLACK
+p_pal[1] = 0x000000  # mountain shadow: ALWAYS BLACK
+p_pal[2] = 0x320064  # mountain body: purple silhouette
+p_pal[3] = 0x7828C8  # mountain highlight: bright purple edge
+p_pal[4] = 0xC8B4FF  # snow cap: bright white
+p_pal[5] = 0x000000  # valley floor: BLACK (night)
 
-p_bmp = displayio.Bitmap(W, H, 8)
+p_bmp = displayio.Bitmap(W, H, 6)
 
-# Generate Andes mountain range
+# Generate Andes mountain range — SILHOUETTE STYLE
+# Mountains are a thin bright outline (top 3-4 rows of silhouette visible),
+# everything below fades to black shadow. Only peaks glow.
 mtn_peaks = [(6,10,9), (18,5,13), (32,7,11), (46,9,10), (58,13,7)]
 
 for x in range(W):
@@ -398,31 +370,36 @@ for x in range(W):
 
     for y in range(H):
         if y < top_y:
-            p_bmp[x, y] = 0  # sky
+            p_bmp[x, y] = 0  # BLACK sky
         else:
             depth = y - top_y
-            total = max(1, H - top_y)
-            if depth < 2 and top_y < 9:
-                p_bmp[x, y] = 4  # snow cap
-            elif depth < total * 35 // 100:
-                p_bmp[x, y] = 3  # highlight
-            elif depth < total * 65 // 100:
-                p_bmp[x, y] = 2  # body
-            elif y >= H - 4:
-                p_bmp[x, y] = 5  # green valley
+            # Snow: ONLY 1 pixel at the very peak tip of tall mountains
+            if depth == 0 and top_y < 9:
+                p_bmp[x, y] = 4  # snow cap — single bright pixel
+            # Highlight: top 2 rows of mountain (bright edge)
+            elif depth < 2:
+                p_bmp[x, y] = 3  # highlight (bright ridge line)
+            # Body: next 3 rows (visible silhouette)
+            elif depth < 5:
+                p_bmp[x, y] = 2  # body (silhouette color)
+            # Valley floor: bottom 1 row only
+            elif y == H - 1:
+                p_bmp[x, y] = 5  # valley floor (single green line)
+            # Everything else: BLACK shadow (invisible on black bg)
             else:
-                p_bmp[x, y] = 1  # shadow
+                p_bmp[x, y] = 1  # shadow = BLACK = disappears
 
 peru_group.append(displayio.TileGrid(p_bmp, pixel_shader=p_pal))
 
-# --- Stars overlay (for night phases) ---
+# --- Stars overlay (for night phases — now fill the whole black sky) ---
 p_star_pal = displayio.Palette(3)
 p_star_pal[0] = 0x000000; p_star_pal.make_transparent(0)
 p_star_pal[1] = 0xFFFFFF; p_star_pal[2] = 0xAAAA88
 
 p_star_bmp = displayio.Bitmap(W, H, 3)
-for _ in range(50):
-    sx, sy = random.randint(0, W-1), random.randint(0, 18)
+# Stars across the full screen — most of it is now black, so stars pop everywhere
+for _ in range(65):
+    sx, sy = random.randint(0, W-1), random.randint(0, H-4)
     p_star_bmp[sx, sy] = random.choice([1, 2])
 p_star_grid = displayio.TileGrid(p_star_bmp, pixel_shader=p_star_pal)
 peru_group.append(p_star_grid)
@@ -430,7 +407,7 @@ peru_group.append(p_star_grid)
 # --- Sun sprite (7x7) ---
 sun_pal = displayio.Palette(3)
 sun_pal[0] = 0x000000; sun_pal.make_transparent(0)
-sun_pal[1] = 0xFFCC00; sun_pal[2] = 0xFFEE44
+sun_pal[1] = 0xFF8800; sun_pal[2] = 0xFFCC00  # bold orange/gold — max pop on black
 
 sun_bmp = displayio.Bitmap(7, 7, 3)
 for px,py,pc in [
@@ -449,11 +426,11 @@ peru_group.append(sun_tg)
 # --- Llama sprite (12x9, facing right, with colorful blanket) ---
 ll_pal = displayio.Palette(6)
 ll_pal[0] = 0x000000; ll_pal.make_transparent(0)
-ll_pal[1] = 0xEEDDCC  # cream body
-ll_pal[2] = 0xCC1111  # red blanket
-ll_pal[3] = 0xDDAA00  # gold blanket
-ll_pal[4] = 0x221100  # dark (eye/hooves)
-ll_pal[5] = 0xBBAA99  # shadow
+ll_pal[1] = 0xFFEECC  # cream body
+ll_pal[2] = 0xFF2200  # red blanket
+ll_pal[3] = 0xFFCC00  # gold blanket
+ll_pal[4] = 0x604020  # dark (eye/hooves)
+ll_pal[5] = 0xCCAA80  # shadow
 
 LLW, LLH = 12, 9
 ll_bmp = displayio.Bitmap(LLW, LLH, 6)
@@ -483,8 +460,8 @@ peru_group.append(llama_tg)
 # --- Condor sprite (14x5, soaring silhouette with white collar) ---
 cd_pal = displayio.Palette(3)
 cd_pal[0] = 0x000000; cd_pal.make_transparent(0)
-cd_pal[1] = 0x111111  # black body
-cd_pal[2] = 0xDDDDDD  # white collar
+cd_pal[1] = 0xAAAAAA  # bright gray body — visible against black sky
+cd_pal[2] = 0xFFFFFF  # white collar — brightest accent
 
 CDW, CDH = 14, 5
 cd_bmp = displayio.Bitmap(CDW, CDH, 3)
@@ -508,57 +485,66 @@ for px,py,pc in [
 condor_tg = displayio.TileGrid(cd_bmp, pixel_shader=cd_pal, x=W+20, y=-10)
 peru_group.append(condor_tg)
 
-# --- Inca pattern band (128x5, scrolling geometric textile) ---
-inca_pal = displayio.Palette(5)
-inca_pal[0] = 0x000000; inca_pal.make_transparent(0)
-inca_pal[1] = 0xBB1111  # deep red
-inca_pal[2] = 0xDDAA00  # gold
-inca_pal[3] = 0xEEDDCC  # cream
-inca_pal[4] = 0xCC5500  # orange
+# --- Second llama (walks the other direction, smaller baby llama) ---
+ll2_pal = displayio.Palette(4)
+ll2_pal[0] = 0x000000; ll2_pal.make_transparent(0)
+ll2_pal[1] = 0xDDCCBB  # lighter cream
+ll2_pal[2] = 0xFF4400  # orange blanket
+ll2_pal[3] = 0x604020  # dark accents
 
-IW, IH = 128, 5
-inca_bmp = displayio.Bitmap(IW, IH, 5)
-# Repeating stepped diamond pattern
-for x in range(IW):
-    for y in range(IH):
-        px = x % 10
-        # Two diamonds per 10-pixel period
-        d1 = abs(px - 2) + abs(y - 2)
-        d2 = abs(px - 7) + abs(y - 2)
-        d = min(d1, d2)
-        if d == 0:
-            inca_bmp[x, y] = 3  # cream center
-        elif d == 1:
-            inca_bmp[x, y] = 2  # gold ring
-        elif d == 2:
-            inca_bmp[x, y] = 1  # red ring
-
-inca_tg = displayio.TileGrid(inca_bmp, pixel_shader=inca_pal, x=0, y=H+5)
-peru_group.append(inca_tg)
-
-# --- Heart sprite (7x6, pulsing red) ---
-ht_pal = displayio.Palette(2)
-ht_pal[0] = 0x000000; ht_pal.make_transparent(0)
-ht_pal[1] = 0xDD0000
-
-HTW, HTH = 7, 6
-ht_bmp = displayio.Bitmap(HTW, HTH, 2)
-for px,py in [
-    (1,0),(2,0),(4,0),(5,0),
-    (0,1),(1,1),(2,1),(3,1),(4,1),(5,1),(6,1),
-    (0,2),(1,2),(2,2),(3,2),(4,2),(5,2),(6,2),
-    (1,3),(2,3),(3,3),(4,3),(5,3),
-    (2,4),(3,4),(4,4),
-    (3,5),
+LL2W, LL2H = 8, 7
+ll2_bmp = displayio.Bitmap(LL2W, LL2H, 4)
+for px,py,pc in [
+    # Ears
+    (5,0,1),(6,0,1),
+    # Head
+    (4,1,1),(5,1,1),(6,1,1),(6,1,3),
+    # Neck
+    (4,2,1),(5,2,1),
+    (3,3,1),(4,3,1),
+    # Body with blanket
+    (1,4,1),(2,4,2),(3,4,2),(4,4,1),(5,4,1),(6,4,1),
+    (1,5,1),(2,5,1),(3,5,1),(4,5,1),(5,5,1),
+    # Legs
+    (2,6,3),(5,6,3),
 ]:
-    if 0<=px<HTW and 0<=py<HTH: ht_bmp[px,py]=1
-heart_tg = displayio.TileGrid(ht_bmp, pixel_shader=ht_pal, x=W+10, y=H+10)
-peru_group.append(heart_tg)
+    if 0<=px<LL2W and 0<=py<LL2H: ll2_bmp[px,py]=pc
+llama2_tg = displayio.TileGrid(ll2_bmp, pixel_shader=ll2_pal, x=-20, y=H)
+peru_group.append(llama2_tg)
 
-# --- Peru text label ---
-p_txt = Label(terminalio.FONT, text="", color=0xCC8833)
-p_txt.y = 28; p_txt.x = W+10
-peru_group.append(p_txt)
+# --- Peruvian flag (12x8, vertical red-white-red bands) ---
+flag_pal = displayio.Palette(4)
+flag_pal[0] = 0x000000; flag_pal.make_transparent(0)
+flag_pal[1] = 0xDD0000  # red
+flag_pal[2] = 0xFFFFFF  # white
+flag_pal[3] = 0xCCAA00  # gold (coat of arms accent)
+
+FLW, FLH = 12, 8
+flag_bmp = displayio.Bitmap(FLW, FLH, 4)
+for px in range(FLW):
+    for py in range(FLH):
+        if px < 4:
+            flag_bmp[px, py] = 1    # red band
+        elif px < 8:
+            flag_bmp[px, py] = 2    # white band
+        else:
+            flag_bmp[px, py] = 1    # red band
+# Gold emblem dot in center of white band
+for px,py in [(5,3),(6,3),(5,4),(6,4)]:
+    flag_bmp[px, py] = 3
+flag_tg = displayio.TileGrid(flag_bmp, pixel_shader=flag_pal, x=W+10, y=H+10)
+peru_group.append(flag_tg)
+
+# --- Tiny heart (5x4, appears above llamas when they meet) ---
+th_pal = displayio.Palette(2)
+th_pal[0] = 0x000000; th_pal.make_transparent(0)
+th_pal[1] = 0xFF0000
+THW, THH = 5, 4
+th_bmp = displayio.Bitmap(THW, THH, 2)
+for px,py in [(1,0),(3,0),(0,1),(1,1),(2,1),(3,1),(4,1),(0,2),(1,2),(2,2),(3,2),(4,2),(1,3),(2,3),(3,3),(2,3)]:
+    if 0<=px<THW and 0<=py<THH: th_bmp[px,py]=1
+heart_tg = displayio.TileGrid(th_bmp, pixel_shader=th_pal, x=W+10, y=H+10)
+peru_group.append(heart_tg)
 
 # ======================================================================
 # MATRIX RAIN SETUP
@@ -580,23 +566,6 @@ for _ in range(NUM_DROPS):
         'speed':random.randint(1,3),'length':random.randint(4,14),'tick':0})
 
 # ======================================================================
-# RAINBOW WAVE SETUP
-# ======================================================================
-rainbow_group = displayio.Group()
-
-rb_pal = displayio.Palette(16)
-for i in range(16):
-    angle = (i/16)*2*math.pi
-    r = int((math.sin(angle)*0.5+0.5)*255)
-    g = int((math.sin(angle+2.094)*0.5+0.5)*255)
-    b = int((math.sin(angle+4.189)*0.5+0.5)*255)
-    rb_pal[i] = (r<<16)|(g<<8)|b
-
-rb_bmp = displayio.Bitmap(W, H, 16)
-rb_grid = displayio.TileGrid(rb_bmp, pixel_shader=rb_pal)
-rainbow_group.append(rb_grid)
-
-# ======================================================================
 # ANIMATION STATE
 # ======================================================================
 far_s = mid_s = near_s = 0.0
@@ -613,7 +582,7 @@ btn_up = digitalio.DigitalInOut(board.BUTTON_UP)
 btn_up.switch_to_input(pull=digitalio.Pull.UP)
 btn_down = digitalio.DigitalInOut(board.BUTTON_DOWN)
 btn_down.switch_to_input(pull=digitalio.Pull.UP)
-MODES = ["space", "rain", "rainbow", "peru"]
+MODES = ["space", "rain", "peru"]
 btn_last = True
 btn_last2 = True
 
@@ -623,15 +592,13 @@ MAX_SHOOTS = 3
 planet_shown = False
 
 # Peru state
-p_txt_x = float(W)
-p_txt_on = False
-p_txt_t = 0.0
-p_txt_i = 0
-llama_shown = False
 condor_shown = False
-inca_shown = False
-heart_shown = False
-heart_floats = []  # floating heart positions
+flag_shown = False
+# Llama love story state machine:
+# 0=idle, 1=approaching, 2=meeting, 3=heart, 4=leaving together, 5=returning with babies
+llama_phase = 0
+llama_timer = 0.0
+llama_meet_x = 30  # where they meet in the middle
 
 # IP display at startup
 ip_label = Label(terminalio.FONT, text="http://" + ip, color=0x33AA66)
@@ -674,8 +641,6 @@ while True:
             display.root_group = space_group
         elif current_mode == "rain":
             display.root_group = rain_group
-        elif current_mode == "rainbow":
-            display.root_group = rainbow_group
         elif current_mode == "peru":
             display.root_group = peru_group
         prev_mode = current_mode
@@ -714,7 +679,7 @@ while True:
                 c_next = NEB[next_phase][ci]
                 c = lerp_c(c_now, c_next, p_t)
                 b = breath if ci != 1 else breath2
-                c = (dim(int(c[0]*b), bri_mult), dim(int(c[1]*b), bri_mult), dim(int(c[2]*b), bri_mult))
+                c = (clamp(int(c[0]*b)), clamp(int(c[1]*b)), clamp(int(c[2]*b)))
                 bg_pal[ci+1] = rgb_pack(c)
 
         if frame % 5 == 0:
@@ -724,13 +689,13 @@ while True:
             tw_near = math.sin(now*0.8+2.0)*0.08+0.92
             for i,base_c in enumerate(FAR_BASE):
                 m = bri*tw_far
-                far_pal[i+1]=rgb_pack((dim(int(base_c[0]*m),bri_mult),dim(int(base_c[1]*m),bri_mult),dim(int(base_c[2]*m),bri_mult)))
+                far_pal[i+1]=rgb_pack((clamp(int(base_c[0]*m)),clamp(int(base_c[1]*m)),clamp(int(base_c[2]*m))))
             for i,base_c in enumerate(MID_BASE):
                 m = bri*tw_mid
-                mid_pal[i+1]=rgb_pack((dim(int(base_c[0]*m),bri_mult),dim(int(base_c[1]*m),bri_mult),dim(int(base_c[2]*m),bri_mult)))
+                mid_pal[i+1]=rgb_pack((clamp(int(base_c[0]*m)),clamp(int(base_c[1]*m)),clamp(int(base_c[2]*m))))
             for i,base_c in enumerate(NEAR_BASE):
                 m = bri*tw_near
-                near_pal[i+1]=rgb_pack((dim(min(255,int(base_c[0]*m)),bri_mult),dim(min(255,int(base_c[1]*m)),bri_mult),dim(min(255,int(base_c[2]*m)),bri_mult)))
+                near_pal[i+1]=rgb_pack((clamp(min(255,int(base_c[0]*m))),clamp(min(255,int(base_c[1]*m))),clamp(min(255,int(base_c[2]*m)))))
 
         spd = STAR_SPD[phase]+(STAR_SPD[next_phase]-STAR_SPD[phase])*p_t
         far_s += 0.25*spd; mid_s += 0.6*spd; near_s += 1.3*spd
@@ -756,16 +721,6 @@ while True:
         if frame % 5 == 0:
             t_frame = 1-t_frame
             thrust_tg.bitmap = t_bmp_b if t_frame else t_bmp_a
-
-        if bri_changed:
-            for i,c in enumerate(THRUST_BASE):
-                tpal[i+1]=rgb_pack((dim(c[0],bri_mult),dim(c[1],bri_mult),dim(c[2],bri_mult)))
-            shoot_pal[1]=dim_hex(0xFFFFFF,bri_mult)
-            shoot_pal[2]=dim_hex(0xAAAAFF,bri_mult)
-            shoot_pal[3]=dim_hex(0x5555AA,bri_mult)
-            planet_pal[1]=dim_hex(0x334488,bri_mult)
-            planet_pal[2]=dim_hex(0x445599,bri_mult)
-            planet_pal[3]=dim_hex(0x223366,bri_mult)
 
         for s in shoots:
             for sx,sy in s[2]: shoot_bmp[sx,sy]=0
@@ -815,24 +770,20 @@ while True:
         pp_t = (cycle_t - pp_start) / (pp_end - pp_start)
         pp_next = (pp+1) % len(PERU_PT)
 
-        # --- Animate sky + mountain palette ---
+        # --- Animate mountain palette (SILHOUETTE on BLACK) ---
         if frame % 3 == 0:
-            # Sky color
-            sky = lerp_c(PERU_SKY[pp], PERU_SKY[pp_next], pp_t)
-            p_pal[0] = rgb_pack((dim(sky[0],bri_mult), dim(sky[1],bri_mult), dim(sky[2],bri_mult)))
-
-            # Mountain colors
+            # Mountain colors (shadow=idx1 always BLACK, body=idx2, highlight=idx3)
             for ci in range(3):
                 mc = lerp_c(PERU_MTN[pp][ci], PERU_MTN[pp_next][ci], pp_t)
-                p_pal[ci+1] = rgb_pack((dim(mc[0],bri_mult), dim(mc[1],bri_mult), dim(mc[2],bri_mult)))
+                p_pal[ci+1] = rgb_pack(mc)
 
-            # Snow
+            # Snow — always bright white, single pixels at peaks
             sc = lerp_c(PERU_SNOW[pp], PERU_SNOW[pp_next], pp_t)
-            p_pal[4] = rgb_pack((dim(sc[0],bri_mult), dim(sc[1],bri_mult), dim(sc[2],bri_mult)))
+            p_pal[4] = rgb_pack(sc)
 
-            # Green valley
+            # Valley floor — single green line at bottom
             gc = lerp_c(PERU_GREEN[pp], PERU_GREEN[pp_next], pp_t)
-            p_pal[5] = rgb_pack((dim(gc[0],bri_mult), dim(gc[1],bri_mult), dim(gc[2],bri_mult)))
+            p_pal[5] = rgb_pack(gc)
 
         # --- Stars (visible at night, fade during day) ---
         star_bri = 0.0
@@ -843,135 +794,141 @@ while True:
 
         if frame % 5 == 0:
             tw = math.sin(now * 1.5) * 0.15 + 0.85
-            sb = star_bri * tw * bri_mult
-            p_star_pal[1] = rgb_pack((dim(int(255*sb), 1.0), dim(int(255*sb), 1.0), dim(int(255*sb), 1.0)))
-            p_star_pal[2] = rgb_pack((dim(int(170*sb), 1.0), dim(int(170*sb), 1.0), dim(int(136*sb), 1.0)))
+            sb = star_bri * tw
+            p_star_pal[1] = rgb_pack((clamp(int(255*sb)), clamp(int(255*sb)), clamp(int(255*sb))))
+            p_star_pal[2] = rgb_pack((clamp(int(170*sb)), clamp(int(170*sb)), clamp(int(136*sb))))
 
-        # --- Sun position (rises during dawn, sets during sunset) ---
-        if 30 < cycle_t < 90:
-            # Rising (60 seconds)
-            st = (cycle_t - 30) / 60.0
-            sun_tg.x = 48 - int(st * 15)
-            sun_tg.y = H - 3 - int(st * (H - 5))
-        elif 90 <= cycle_t < 230:
-            # Arcing across sky
-            st = (cycle_t - 90) / 140.0
-            sun_tg.x = 33 - int(st * 28)
-            sun_tg.y = 2 + int(math.sin(st * math.pi) * 3)
-        elif 230 <= cycle_t < 280:
-            # Setting
-            st = (cycle_t - 230) / 50.0
-            sun_tg.x = 5 + int(st * 5)
-            sun_tg.y = 2 + int(st * (H - 2))
+        # --- Sun arc (rises right side, arcs HIGH over mountains, sets left) ---
+        # Tallest peak is y=5, sun is 7px tall, so y=-4 keeps it above peaks
+        if 30 < cycle_t < 80:
+            # Rising from right horizon
+            st = (cycle_t - 30) / 50.0
+            ease = st * st * (3.0 - 2.0 * st)
+            sun_tg.x = 54 - int(ease * 10)
+            sun_tg.y = 20 - int(ease * 24)  # rise from y=20 up to y=-4
+        elif 80 <= cycle_t < 230:
+            # Full arc across the sky, well above mountains
+            st = (cycle_t - 80) / 150.0
+            sun_tg.x = 44 - int(st * 40)  # sweep from x=44 to x=4
+            sun_tg.y = -4 + int(math.sin(st * math.pi) * 2)  # gentle bob at y=-4 to -2
+        elif 230 <= cycle_t < 270:
+            # Setting on left side
+            st = (cycle_t - 230) / 40.0
+            ease = st * st * (3.0 - 2.0 * st)
+            sun_tg.x = 4 - int(ease * 6)
+            sun_tg.y = -4 + int(ease * 24)  # drop from y=-4 to y=20
         else:
-            sun_tg.y = H + 5  # hidden below
+            sun_tg.y = H + 5  # hidden
 
-        # Sun brightness by phase
-        if frame % 4 == 0 and bri_changed or frame % 20 == 0:
-            sun_pal[1] = dim_hex(0xFFCC00, bri_mult)
-            sun_pal[2] = dim_hex(0xFFEE44, bri_mult)
 
-        # --- Llama (walks during morning phase ~85-130s) ---
-        if 85 < cycle_t < 135 and not llama_shown:
-            llama_tg.x = W + 5
-            # Place llama on the valley floor
-            llama_tg.y = H - LLH - 1
-            llama_shown = True
-        if llama_shown:
+        # --- Llama love story (plays during morning/midday ~70-180s) ---
+        LLAMA_Y = H - LLH - 1
+        LLAMA2_Y = H - LL2H - 1
+
+        if cycle_t < 10:
+            llama_phase = 0
+            llama_tg.x = W + 10; llama_tg.y = H + 5
+            llama2_tg.x = -20; llama2_tg.y = H + 5
+            heart_tg.x = W + 10; heart_tg.y = H + 10
+
+        # Phase 0 → 1: Start approaching
+        if 70 < cycle_t < 75 and llama_phase == 0:
+            llama_phase = 1
+            llama_tg.x = W + 5; llama_tg.y = LLAMA_Y     # enters from right
+            llama2_tg.x = -LL2W - 5; llama2_tg.y = LLAMA2_Y  # enters from left
+            llama_timer = now
+
+        # Phase 1: Walking toward each other
+        if llama_phase == 1:
+            if frame % 3 == 0:
+                if llama_tg.x > llama_meet_x + 2:
+                    llama_tg.x -= 1
+                if llama2_tg.x < llama_meet_x - LL2W - 2:
+                    llama2_tg.x += 1
+            # Both arrived?
+            if llama_tg.x <= llama_meet_x + 2 and llama2_tg.x >= llama_meet_x - LL2W - 2:
+                llama_phase = 2
+                llama_timer = now
+
+        # Phase 2: Standing together (pause)
+        if llama_phase == 2:
+            if now - llama_timer > 2.0:
+                llama_phase = 3
+                llama_timer = now
+                # Show heart above them
+                heart_tg.x = llama_meet_x - 1
+                heart_tg.y = LLAMA_Y - THH - 2
+
+        # Phase 3: Heart visible, pulsing
+        if llama_phase == 3:
+            pulse = math.sin(now * 4.0) * 0.3 + 0.7
+            th_pal[1] = (max(1, int(255 * pulse)) << 16)
+            # Heart floats up slowly
+            if frame % 20 == 0:
+                heart_tg.y -= 1
+            if now - llama_timer > 4.0:
+                llama_phase = 4
+                llama_timer = now
+                heart_tg.x = W + 10; heart_tg.y = H + 10  # hide heart
+
+        # Phase 4: Leave together (both walk off right side)
+        if llama_phase == 4:
+            if frame % 3 == 0:
+                llama_tg.x += 1
+                llama2_tg.x += 1
+            if llama_tg.x > W + 10:
+                llama_phase = 5
+                llama_timer = now
+
+        # Phase 5: Return from right with babies (baby = llama2 following llama1)
+        if llama_phase == 5 and now - llama_timer > 3.0:
+            if llama_tg.x > W + 5:
+                # Reset positions — family enters from right
+                llama_tg.x = W + 5; llama_tg.y = LLAMA_Y
+                llama2_tg.x = W + 18; llama2_tg.y = LLAMA2_Y  # baby follows behind
             if frame % 3 == 0:
                 llama_tg.x -= 1
-            if llama_tg.x < -LLW:
-                llama_shown = False
+                llama2_tg.x -= 1
+            # Family walks all the way across and off the left
+            if llama2_tg.x < -LL2W - 5:
+                llama_phase = 0
                 llama_tg.x = W + 10; llama_tg.y = H + 5
-        if cycle_t < 10: llama_shown = False
+                llama2_tg.x = -20; llama2_tg.y = H + 5
 
-        # Llama brightness
-        if bri_changed:
-            ll_pal[1] = dim_hex(0xEEDDCC, bri_mult)
-            ll_pal[2] = dim_hex(0xCC1111, bri_mult)
-            ll_pal[3] = dim_hex(0xDDAA00, bri_mult)
-            ll_pal[4] = dim_hex(0x221100, bri_mult)
-            ll_pal[5] = dim_hex(0xBBAA99, bri_mult)
-
-        # --- Condor (soars during midday phase ~145-185s) ---
-        if 145 < cycle_t < 185 and not condor_shown:
+        # --- Condor (soars during midday ~140-200s) ---
+        if 140 < cycle_t < 200 and not condor_shown:
             condor_tg.x = W + 5
-            condor_tg.y = random.randint(2, 8)
+            condor_tg.y = random.randint(6, 14)
             condor_shown = True
         if condor_shown:
             if frame % 2 == 0:
                 condor_tg.x -= 1
-            # Gentle vertical bob
             condor_tg.y = condor_tg.y + (1 if frame % 40 < 20 else -1) if frame % 20 == 0 else condor_tg.y
             if condor_tg.x < -CDW:
                 condor_shown = False
                 condor_tg.x = W + 20; condor_tg.y = -10
         if cycle_t < 10: condor_shown = False
 
-        if bri_changed:
-            cd_pal[1] = dim_hex(0x111111, bri_mult)
-            cd_pal[2] = dim_hex(0xDDDDDD, bri_mult)
-
-        # --- Inca pattern band (appears during midday/golden ~150-235s) ---
-        if 150 < cycle_t < 235:
-            if not inca_shown:
-                inca_tg.y = H - IH
-                inca_shown = True
-            # Scroll pattern
-            if frame % 3 == 0:
-                inca_tg.x -= 1
-                if inca_tg.x < -W:
-                    inca_tg.x = 0
-        else:
-            if inca_shown:
-                inca_tg.y = H + 5
-                inca_shown = False
-
-        if bri_changed:
-            inca_pal[1] = dim_hex(0xBB1111, bri_mult)
-            inca_pal[2] = dim_hex(0xDDAA00, bri_mult)
-            inca_pal[3] = dim_hex(0xEEDDCC, bri_mult)
-            inca_pal[4] = dim_hex(0xCC5500, bri_mult)
-
-        # --- Pulsing heart (visible during golden hour ~195-235s) ---
-        if 195 < cycle_t < 235:
-            if not heart_shown:
-                heart_tg.x = 2
-                heart_tg.y = 3
-                heart_shown = True
-            # Heartbeat pulse via palette
-            pulse = math.sin(now * 3.5) * 0.3 + 0.7
-            hr = int(220 * pulse * bri_mult)
-            hg = int(20 * pulse * bri_mult)
-            ht_pal[1] = (max(1,hr) << 16) | (max(1,hg) << 8)
-        else:
-            if heart_shown:
-                heart_tg.x = W + 10; heart_tg.y = H + 10
-                heart_shown = False
-
-        # --- Scrolling text ---
-        p_txt_t += dt
-        p_msgs = PERU_MSG[pp]
-        p_interval = PERU_TEXT_INT[pp]
-
-        if not p_txt_on and p_txt_t >= p_interval and p_msgs:
-            p_txt_on = True; p_txt_t = 0.0; p_txt_x = float(W)
-            p_txt.text = p_msgs[p_txt_i % len(p_msgs)]
-            p_txt.color = dim_hex(PERU_TEXT_COL[pp], bri_mult)
-            p_txt_i += 1
-        if p_txt_on:
-            p_txt_x -= 0.5
-            p_txt.x = int(p_txt_x)
-            if p_txt_x < -(len(p_txt.text)*6+10):
-                p_txt_on = False; p_txt_t = 0.0; p_txt.x = W+10
+        # --- Peruvian flag (appears during dawn ~45-75s, floats in the void) ---
+        if 45 < cycle_t < 75 and not flag_shown:
+            flag_tg.x = W + 5
+            flag_tg.y = random.randint(8, 16)
+            flag_shown = True
+        if flag_shown:
+            if frame % 4 == 0:
+                flag_tg.x -= 1
+            # Gentle flutter
+            if frame % 30 == 0:
+                flag_tg.y += 1 if frame % 60 < 30 else -1
+            if flag_tg.x < -FLW:
+                flag_shown = False
+                flag_tg.x = W + 10; flag_tg.y = H + 10
+        if cycle_t < 10: flag_shown = False
 
     # ==================================================================
     # MATRIX RAIN
     # ==================================================================
     elif current_mode == "rain":
-        if bri_changed:
-            for i in range(1, 6):
-                rain_pal[i] = dim_hex(RAIN_BASE[i], bri_mult)
         if frame % 2 == 0:
             for y in range(H):
                 for x in range(W):
@@ -991,22 +948,4 @@ while True:
                         d['x']=random.randint(0,W-1); d['y']=random.randint(-10,-1)
                         d['speed']=random.randint(1,3); d['length']=random.randint(4,14)
 
-    # ==================================================================
-    # RAINBOW WAVE
-    # ==================================================================
-    elif current_mode == "rainbow":
-        if bri_changed:
-            for i in range(16):
-                angle=(i/16)*2*math.pi
-                r=int((math.sin(angle)*0.5+0.5)*255)
-                g=int((math.sin(angle+2.094)*0.5+0.5)*255)
-                b=int((math.sin(angle+4.189)*0.5+0.5)*255)
-                rb_pal[i]=rgb_pack((dim(r,bri_mult),dim(g,bri_mult),dim(b,bri_mult)))
-        if frame % 2 == 0:
-            offset = frame // 2
-            for y in range(H):
-                for x in range(W):
-                    rb_bmp[x, y] = (x+y+offset) % 16
-
-    bri_changed = False
     time.sleep(0.035)
